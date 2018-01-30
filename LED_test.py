@@ -8,7 +8,7 @@ try:
 	# LedPin = 8
 
 	GPIO.setmode(GPIO.BCM)
-	ButtonPin = 4
+	ButtonPin = 6
 	LedPin = 14
 
 	GPIO.setup(ButtonPin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)

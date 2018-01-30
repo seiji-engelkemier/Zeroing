@@ -8,7 +8,6 @@ import test
 import AMT203
 import RPi.GPIO as gpio
 import wiringpi
-import Zeroing_v2 as zeroing
 
 MM_PER_STEP = 0.036
 MM_COUNTER = 0
@@ -51,29 +50,42 @@ class Z_Motor(threading.Thread):
     def initial_sequence(self):
         print("Begin zero-ing")
         self.counter = 0
-        while self.counter < 2:
-            # print(self.counter)
-            # self.counter += 1
-            if zeroing.zero():
-                print("now here")
-                self.counter += 1
-                self.move_up(2)
-                self.move_down(2)
-                time.sleep(1)
-                if Zeroing.zero():
-                    print("Tool is zeroed")
-                    self.counter += 1
-                    time.sleep(3)
-            else:
-                self.move_down(1)
-                time.sleep(1)
+        while Zeroing.zero() == False:
+            self.move_down(1)
+        if Zeroing.zero():
+            print("First contact made")
+        self.move_up(6)
+        self.move_down(6)
+        if Zeroing.zero():
+            print("Second contact made")
+        else:
+            print("Second contact not made")
+        self.move_up(6)
+        print("Tool is zeroed")
+
+        # First attempt
+        # while self.counter < 2:
+        #     # print(self.counter)
+        #     # self.counter += 1
+        #     if zeroing.zero():
+        #         print("now here")
+        #         self.counter += 1
+        #         self.move_up(2)
+        #         self.move_down(2)
+        #         time.sleep(1)
+        #         if Zeroing.zero():
+        #             print("Tool is zeroed")
+        #             self.counter += 1
+        #             time.sleep(3)
+        #     else:
+        #         self.move_down(1)
+        #         time.sleep(1)
         
+        # Joao's code
         # self.move_down(6)
         # time.sleep(1)
         # self.move_up(6)
         # time.sleep(1)
-        print("HERE")
-        time.sleep(5)
 
     def move_down(self,mm):
         #print "moving down: %s mm" % (mm)
@@ -157,7 +169,7 @@ class Encoder(threading.Thread):
         elif self.last_position - current_position < 0 and not self.direction:
             self.lap -= 1
         self.last_position = current_position
-        print "HELLO", abs(4096 - ((self.lap*self.resolution) + current_position))-4096
+        #print "HELLO", abs(4096 - ((self.lap*self.resolution) + current_position))-4096
         return abs(4096 - ((self.lap*self.resolution) + current_position))-4096
 
     def set_zero(self):
@@ -184,7 +196,7 @@ class DC_Motor(threading.Thread):
         # gpio.output(self.motor_pin, False)
 
     def start_motor(self, value):
-        print "inside motor"
+        #print "inside motor"
         wiringpi.pwmWrite(self.motor_pin, value)
 
     def stop_motor(self):
@@ -209,24 +221,20 @@ class Main(threading.Thread):
     def initial_sequence(self):
         print "Running initial sequence..."
         goal = 5.0 #mm
-        self.encoder.set_zero()
-        self.current_position = self.queue.get(True,None)
-        for i in range(0,4):
-            self.encoder.set_zero()
-            self.current_position = self.queue.get(True,None)
-            while not goal - self.tolerance <= self.current_position <= goal + self.tolerance:
-                self.current_position = self.queue.get(True,None)
-                self.dc_motor.start_motor()
-            self.dc_motor.stop_motor()
-            self.z_motor.receive(True)
-            self.encoder.set_zero()
-            self.current_position = self.queue.get(True,None)
-            while not goal - self.tolerance <= self.current_position <= goal + self.tolerance:
-                self.current_position = self.queue.get(True,None)
-                self.dc_motor.start_motor()
-            self.dc_motor.stop_motor()
-            self.z_motor.receive(False)
-            self.encoder.set_zero()
+        self.z_motor.receive(True)
+        self.dc_motor.start_motor(700)
+        time.sleep(1)
+        self.dc_motor.start_motor(0)
+        self.z_motor.receive(False)
+        self.dc_motor.start_motor(700)
+        time.sleep(1)
+        self.dc_motor.start_motor(0)        
+        self.z_motor.receive(True)
+        self.dc_motor.start_motor(700)
+        time.sleep(1)
+        self.dc_motor.start_motor(0)
+        self.z_motor.receive(False)
+
 
     def update_value(self,value):
         self.queue.put(value)
@@ -239,31 +247,30 @@ class Main(threading.Thread):
 
     def run(self):
         print "HERE"
-        self.z_motor.start()
+        self.initial_sequence()
         self.encoder.set_zero()
         time.sleep(1)
         print "THERE"
         self.encoder.start()
-        #self.initial_sequence()
         for index, item in enumerate(test.test_list):
             print index
             self.current_position = self.queue.get(True,None)
-            objective = item[0]
+            objective = 10*item[0]
             if index is not 0:
-                start_point = test.test_list[index-1][0]
+                start_point = 10*(test.test_list[index-1][0])
             else:
                 start_point = 0
 
-            while not item[0] - self.tolerance <= self.current_position <= item[0] + self.tolerance:
+            while not 10*item[0] - self.tolerance <= self.current_position <= 10*item[0] + self.tolerance:
                 self.current_position = self.queue.get(True,None)
                 speed = self.translate(self.current_position, start_point, objective, 1023,500)
-                print "speed: ", speed
+                print "Current position in mm: ", self.current_position
                 self.dc_motor.start_motor(speed)
                 time.sleep(0.001)
             self.dc_motor.stop_motor()
             self.z_motor.receive(item[1])
-            print "We're at: %smm" % (self.current_position)
-        #self.initial_sequence()
+            #print "We're at: %smm" % (self.current_position)
+        self.initial_sequence()
         self.dc_motor.stop_motor()
         gpio.cleanup()
         self.dc_motor.join()
