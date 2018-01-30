@@ -11,7 +11,7 @@ def zero():
 		# LedPin = 8
 
 		GPIO.setmode(GPIO.BCM)
-		ZeroPin = 4
+		ZeroPin = 6
 		LedPin = 14
 
 		GPIO.setup(ZeroPin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)

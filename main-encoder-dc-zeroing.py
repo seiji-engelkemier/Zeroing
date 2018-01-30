@@ -8,6 +8,7 @@ import test
 import AMT203
 import RPi.GPIO as gpio
 import wiringpi
+# import Zeroing_v2 as Zeroing
 
 MM_PER_STEP = 0.036
 MM_COUNTER = 0
@@ -47,21 +48,56 @@ class Z_Motor(threading.Thread):
         self.motor.set_eighth_step()
         self.mm_per_step_z = 0.003636
 
+        # For zeroing tool
+        self.ZeroPin = 6
+        self.LedPin = 14
+        gpio.setup(self.ZeroPin, gpio.IN, pull_up_down=gpio.PUD_DOWN)
+        gpio.setup(self.LedPin, gpio.OUT)
+
     def initial_sequence(self):
-        print("Begin zero-ing")
-        self.counter = 0
-        while Zeroing.zero() == False:
-            self.move_down(1)
-        if Zeroing.zero():
-            print("First contact made")
-        self.move_up(6)
-        self.move_down(6)
-        if Zeroing.zero():
+        # Third Attempt
+        print("BEGIN ZEROING")
+        self.counter1 = 0
+        self.counter2 = 0
+        self.increment = 0.1
+        self.sleeptime = 0.05
+        while not self.zero():
+            self.move_down(self.increment)
+            self.counter1 += 1
+            time.sleep(self.sleeptime)
+        if self.zero():
+            print("FIRST CONTACT MADE")
+            time.sleep(2)
+        self.move_up(self.counter1*self.increment)
+        time.sleep(2)
+        while not self.zero():
+            self.move_down(self.increment)
+            self.counter2 += 1
+            time.sleep(self.sleeptime)
+        if self.zero():
+            print("Counter1: "+str(self.counter1)+" Coutner 2: "+str(self.counter2))
             print("Second contact made")
-        else:
-            print("Second contact not made")
+            time.sleep(2)
         self.move_up(6)
-        print("Tool is zeroed")
+        print("TOOL IS ZEROD. Pause 5 seconds.")
+        time.sleep(5)
+
+
+        # Second attempt
+        # print("Begin zero-ing")
+        # while Zeroing.zero() == False:
+        #     self.move_down(1)
+        # if Zeroing.zero():
+        #     print("First contact made")
+        # self.move_up(6)
+        # self.move_down(6)
+        # if Zeroing.zero():
+        #     print("Second contact made")
+        # else:
+        #     print("Second contact not made")
+        # self.move_up(6)
+        # print("Tool is zeroed")
+
 
         # First attempt
         # while self.counter < 2:
@@ -86,6 +122,14 @@ class Z_Motor(threading.Thread):
         # time.sleep(1)
         # self.move_up(6)
         # time.sleep(1)
+
+    def zero(self):     
+        self.state = gpio.input(self.ZeroPin)
+        if self.state:
+            return True
+        else:
+            return False
+        
 
     def move_down(self,mm):
         #print "moving down: %s mm" % (mm)
@@ -173,7 +217,7 @@ class Encoder(threading.Thread):
         return abs(4096 - ((self.lap*self.resolution) + current_position))-4096
 
     def set_zero(self):
-        print "Setting zero"
+        print "Encoder, setting zero"
         self.encoder.set_zero()
 
     def run(self):
@@ -218,6 +262,11 @@ class Main(threading.Thread):
         self.last_position = None
         self.tolerance = 0.5
 
+        print("Main init")
+        time.sleep(5)
+        self.z_motor.start()
+        print("Z motor start has passed")
+
     def initial_sequence(self):
         print "Running initial sequence..."
         goal = 5.0 #mm
@@ -246,6 +295,7 @@ class Main(threading.Thread):
         return int(rightMin + (valueScaled * rightSpan))
 
     def run(self):
+        self.z_motor.join()
         print "HERE"
         self.initial_sequence()
         self.encoder.set_zero()
